@@ -1,0 +1,2 @@
+// placeholder: action_create_subscription (v1)
+export default function handler(req:any, res:any){ res.json({ok:true}); }
