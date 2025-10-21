@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 
 const SubscriptionCard: React.FC<{ subscription: Subscription }> = ({ subscription }) => {
   const nextPaymentDate = format(new Date(subscription.next_payment_date), 'MMM dd, yyyy');
+  const serviceUrl = subscription.service_url;
   
   return (
     <Link to={`/subscriptions/${subscription.id}/edit`} className="block">
@@ -73,14 +74,14 @@ const SubscriptionCard: React.FC<{ subscription: Subscription }> = ({ subscripti
             </span>
           </div>
 
-          {subscription.service_url && (
+          {serviceUrl && serviceUrl.length > 0 && (
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center text-muted-foreground">
                 <LinkIcon className="h-4 w-4 mr-2" />
                 <span>Service Link:</span>
               </div>
               <span className="text-primary hover:underline truncate max-w-[50%]">
-                {new URL(subscription.service_url).hostname}
+                {new URL(serviceUrl).hostname}
               </span>
             </div>
           )}
