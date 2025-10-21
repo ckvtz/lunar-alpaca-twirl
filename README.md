@@ -1,5 +1,7 @@
 # SubscriptionGuard — MVP
 
+[![CI](https://github.com/ckvtz/lunar-alpaca-twirl/actions/workflows/ci-and-notify.yml/badge.svg)](https://github.com/ckvtz/lunar-alpaca-twirl/actions)
+
 Local development:
 1. Copy `.env.local.example` → `.env.local` and set `TELEGRAM_BOT_TOKEN`.
 2. `pnpm install`
