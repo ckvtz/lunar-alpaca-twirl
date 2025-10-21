@@ -7,7 +7,7 @@ const NOTIFY_ENDPOINT = process.env.NOTIFY_SH_ENDPOINT;
 /**
  * Workflow function to query pending notifications and send them.
  */
-export default async function handler(req: any, res: any) {
+export default async function handler(_req: any, res: any) {
   
   if (!NOTIFY_ENDPOINT) {
     console.error('NOTIFY_SH_ENDPOINT environment variable is not set.');

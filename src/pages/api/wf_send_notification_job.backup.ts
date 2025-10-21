@@ -1,6 +1,6 @@
-import { supabaseServerClient } from './supabase_server_client.ts';
+import { supabaseServerClient } from './supabase_server_client';
 import fetch from 'node-fetch';
-import { DateTime } from 'luxon';
+import { DateTime as _DateTime } from 'luxon';
 
 const NOTIFY_ENDPOINT = process.env.NOTIFY_SH_ENDPOINT || '';
 
@@ -31,9 +31,9 @@ export default async function handler(req: any, res: any) {
 
     const payload = {
       to: notif.payload_json?.to || null,
-      subject: notif.payload_json?.title || ,
+      subject: notif.payload_json?.title || '',
       body: notif.payload_json?.body || '',
-      text: (notif.payload_json?.body && String(notif.payload_json.body)) || (notif.payload_json?.title && String(notif.payload_json.title)) || ,
+      text: (notif.payload_json?.body && String(notif.payload_json.body)) || (notif.payload_json?.title && String(notif.payload_json.title)) || '',
       meta: { subscription_id: notif.subscription_id, notification_id: notif.id }
     };
 

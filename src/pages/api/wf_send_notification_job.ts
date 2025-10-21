@@ -1,151 +1,56 @@
-// src/pages/api/wf_send_notification_job.ts
-// Telegram-first notification worker endpoint
-// Replace the existing file with this to make Telegram primary channel.
-//
-// IMPORTANT:
-// - Ensure TELEGRAM_BOT_TOKEN is set in your environment (export or source .env.local)
-// - Ensure supabase_server_client.ts exports supabaseServerClient
-//
-// Uses node-fetch; keep node-fetch installed (you already added it earlier).
-
 import { supabaseServerClient } from './supabase_server_client.ts';
 import fetch from 'node-fetch';
+import { DateTime } from 'luxon';
 
 /**
- * Helper: sendMessage via Telegram Bot API
+ * send message via Telegram Bot API
  */
-async function sendViaTelegram(chatId: string | number, text: string, opts?: {
-  parseMode?: 'MarkdownV2' | 'HTML' | 'Markdown' | 'None',
-  disable_web_page_preview?: boolean,
-  reply_markup?: any
-}) {
+async function sendViaTelegram(chatId: string | number, text: string) {
   if (!process.env.TELEGRAM_BOT_TOKEN) {
-    throw new Error('TELEGRAM_BOT_TOKEN not set in environment');
+    throw new Error('TELEGRAM_BOT_TOKEN not set');
   }
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-
-  const body: any = {
+  const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const body = {
     chat_id: String(chatId),
     text: String(text || ''),
-    disable_web_page_preview: opts?.disable_web_page_preview ?? true
+    disable_web_page_preview: true
   };
-
-  if (opts?.parseMode && opts.parseMode !== 'None') body.parse_mode = opts.parseMode;
-  if (opts?.reply_markup) body.reply_markup = opts.reply_markup;
-
-  const res = await fetch(url, {
+  const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-
-  const textRes = await res.text();
-  return { ok: res.ok, status: res.status, body: textRes };
+  const raw = await resp.text();
+  return { ok: resp.ok, status: resp.status, body: raw };
 }
 
 /**
- * Deliver a single notification via Telegram.
- * Resolves chat_id from payload or user_contacts.
- * Updates DB status on success/failure.
+ * Resolve a telegram chat id from the notification row payload_json
+ * - prefer payload_json.chat_id or payload_json.to
+ * - fallback: lookup user_contacts where provider='telegram' for payload_json.user_id
  */
-async function deliverNotificationViaTelegram(notif: any) {
-  try {
-    const payload = notif.payload_json || {};
-    // Resolve chat_id candidates
-    let chatId = payload.chat_id || payload.to || null;
-
-    if (!chatId && payload.user_id) {
-      // lookup user_contacts for provider = 'telegram'
-      const lookupUserId = payload.user_id;
-      const { data: contacts, error: contactErr } = await supabaseServerClient
-        .from('user_contacts')
-        .select('contact_id')
-        .eq('user_id', lookupUserId)
-        .eq('provider', 'telegram')
-        .limit(1);
-
-      if (!contactErr && contacts && contacts.length > 0) {
-        chatId = contacts[0].contact_id;
-        console.log('DEBUG: resolved telegram chat_id from user_contacts ->', chatId);
-      } else {
-        console.log('DEBUG: no telegram mapping found for user', lookupUserId);
-      }
+async function resolveChatId(payload_json: any) {
+  if (!payload_json) return null;
+  if (payload_json.chat_id) return payload_json.chat_id;
+  if (payload_json.to) return payload_json.to;
+  if (payload_json.user_id) {
+    const lookupUserId = payload_json.user_id;
+    const { data: contacts, error } = await supabaseServerClient
+      .from('user_contacts')
+      .select('contact_id')
+      .eq('user_id', lookupUserId)
+      .eq('provider', 'telegram')
+      .limit(1);
+    if (!error && contacts && contacts.length > 0) {
+      return contacts[0].contact_id;
     }
-
-    if (!chatId) {
-      throw new Error('no_chat_id_resolved');
-    }
-
-    // Build message text
-    const titlePart = payload.title || payload.subject || '';
-    const bodyPart = payload.body || payload.text || '';
-    const lines: string[] = [];
-    if (titlePart) lines.push(`${titlePart}`);
-    if (bodyPart) lines.push(bodyPart);
-    // Optionally include clickable link to subscription
-    if (payload.meta?.url) lines.push(`Link: ${payload.meta.url}`);
-    const messageText = lines.join('\n\n').trim() || 'Subscription reminder';
-
-    // Send with retry/backoff
-    const maxAttempts = 3;
-    let attempt = 0;
-    let lastErr: any = null;
-
-    while (attempt < maxAttempts) {
-      attempt += 1;
-      try {
-        console.log(`DEBUG: Telegram send attempt ${attempt} -> chatId=${chatId}`);
-        const result = await sendViaTelegram(chatId, messageText, { parseMode: 'None', disable_web_page_preview: true });
-
-        if (result.ok) {
-          // success -> update notification
-          await supabaseServerClient.from('notifications').update({
-            status: 'sent',
-            sent_at: new Date().toISOString(),
-            last_error: null
-          }).eq('id', notif.id);
-
-          console.log('INFO: Telegram delivered, notif id ->', notif.id);
-          return { ok: true, result };
-        } else {
-          lastErr = `telegram_${result.status}: ${result.body}`;
-          console.warn('WARN: Telegram returned non-ok', lastErr);
-          // simple backoff
-          await new Promise(r => setTimeout(r, 500 * attempt));
-        }
-      } catch (sendErr) {
-        lastErr = String(sendErr && (sendErr.stack || sendErr.message) || sendErr);
-        console.error('ERROR: Telegram send exception', lastErr);
-        await new Promise(r => setTimeout(r, 500 * attempt));
-      }
-    }
-
-    // All attempts failed -> mark notification failed with last error
-    await supabaseServerClient.from('notifications').update({
-      status: 'failed',
-      last_error: lastErr
-    }).eq('id', notif.id);
-
-    return { ok: false, error: lastErr };
-  } catch (e) {
-    const errMsg = (e && e.message) ? e.message : String(e);
-    console.error('ERROR delivering via Telegram:', errMsg);
-    try {
-      await supabaseServerClient.from('notifications').update({
-        status: 'failed',
-        last_error: `deliver_exception: ${errMsg}`
-      }).eq('id', notif.id);
-    } catch (dbErr) {
-      console.error('ERROR writing failure to DB', dbErr);
-    }
-    return { ok: false, error: errMsg };
   }
+  return null;
 }
 
 /**
- * Handler endpoint: expects POST { notification_id: "<uuid>" }
- * Processes one notification (useful for manual job triggers).
+ * Handler: POST { notification_id: "<uuid>" }
+ * Will attempt to deliver via Telegram (if TELEGRAM_BOT_TOKEN set).
  */
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -154,51 +59,144 @@ export default async function handler(req: any, res: any) {
 
   try {
     const { notification_id } = req.body || {};
-
     if (!notification_id) {
-      return res.status(400).json({ error: 'Missing notification_id in body' });
+      return res.status(400).json({ error: 'notification_id required' });
     }
 
-    // fetch notification row (and optionally subscriptions for context)
-    const { data: rows, error: fetchErr } = await supabaseServerClient
+    // fetch the notification row
+    const { data: notif, error: fetchErr } = await supabaseServerClient
       .from('notifications')
-      .select('id, payload_json, status, created_at')
+      .select('id, payload_json, status, attempts_count, max_attempts, next_attempt_at')
       .eq('id', notification_id)
-      .limit(1)
       .single();
 
     if (fetchErr) {
-      console.error('Error fetching notification:', fetchErr);
-      return res.status(500).json({ error: 'Failed to fetch notification', details: fetchErr.message || fetchErr });
+      console.error('Failed to fetch notification', fetchErr);
+      return res.status(500).json({ error: 'Failed to fetch notification', details: String(fetchErr) });
     }
 
-    const notif = rows;
-    if (!notif) {
-      return res.status(404).json({ error: 'Notification not found' });
-    }
+    if (!notif) return res.status(404).json({ error: 'Notification not found' });
 
-    // If already sent, return early
     if (notif.status === 'sent') {
       return res.status(200).json({ ok: true, message: 'Notification already sent', notification_id });
     }
+    
+    // Check if it's time to attempt delivery based on next_attempt_at
+    const now = DateTime.now().toUTC();
+    const nextAttemptDt = notif.next_attempt_at ? DateTime.fromISO(notif.next_attempt_at, { zone: 'utc' }) : now;
 
-    // Primary path: Telegram
+    if (nextAttemptDt > now) {
+        // This notification is scheduled for a future retry/attempt
+        return res.status(200).json({ ok: true, message: 'Notification scheduled for future attempt', notification_id });
+    }
+
+    // Primary: Telegram
     if (process.env.TELEGRAM_BOT_TOKEN) {
-      const tgResult = await deliverNotificationViaTelegram(notif);
-      if (tgResult?.ok) {
-        return res.status(200).json({ ok: true, message: 'Notification sent via Telegram', notification_id });
-      } else {
-        // fell through or failed — respond with failure details (and DB updated by the function)
-        return res.status(500).json({ error: 'Telegram delivery failed', details: tgResult?.error });
+      const payload = notif.payload_json || {};
+      const chatId = await resolveChatId(payload);
+      
+      const currentAttempts = notif.attempts_count || 0;
+      const maxAttempts = notif.max_attempts || 5;
+
+      if (!chatId) {
+        // Permanent failure: Cannot resolve recipient
+        await supabaseServerClient.from('notifications').update({
+          status: 'failed',
+          last_error: 'no_chat_id_resolved',
+          attempts_count: currentAttempts + 1,
+        }).eq('id', notif.id);
+        return res.status(500).json({ error: 'no chat id resolved' });
+      }
+
+      // construct message text
+      const title = payload.title || payload.subject || '';
+      const body = payload.body || payload.text || '';
+      const lines: string[] = [];
+      if (title) lines.push(title);
+      if (body) lines.push(body);
+      if (payload.meta?.url) lines.push(`Link: ${payload.meta.url}`);
+      const messageText = lines.join('\n\n').trim() || 'Subscription reminder';
+
+      // attempt send
+      try {
+        const tg = await sendViaTelegram(chatId, messageText);
+        
+        if (tg.ok) {
+          // SUCCESS
+          await supabaseServerClient.from('notifications').update({
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            last_error: null,
+            attempts_count: currentAttempts + 1,
+          }).eq('id', notif.id);
+
+          return res.status(200).json({ ok: true, method: 'telegram', notification_id });
+        } else {
+          // FAILURE - Apply backoff
+          const bodyStr = tg.body || '';
+          const errText = `http_${tg.status}: ${bodyStr}`;
+          
+          const nextAttempts = currentAttempts + 1;
+          let newStatus = 'pending';
+          let nextAttemptAt = null;
+          let lastError = errText;
+
+          if (nextAttempts >= maxAttempts) {
+              newStatus = 'failed'; // Permanently failed
+              lastError = `Max attempts (${maxAttempts}) reached. Last error: ${lastError}`;
+          } else {
+              // Exponential backoff: 2^attempts minutes (starting at 1 minute for attempt 1)
+              const backoffMinutes = Math.pow(2, nextAttempts);
+              const nextDt = DateTime.now().plus({ minutes: backoffMinutes });
+              nextAttemptAt = nextDt.toUTC().toISO();
+              lastError = `Attempt ${nextAttempts}/${maxAttempts} failed. Retrying in ${backoffMinutes} minutes. Error: ${lastError}`;
+          }
+
+          await supabaseServerClient.from('notifications').update({
+            status: newStatus,
+            attempts_count: nextAttempts,
+            next_attempt_at: nextAttemptAt,
+            last_error: lastError
+          }).eq('id', notif.id);
+
+          return res.status(500).json({ error: 'Telegram delivery failed (retrying)', status: tg.status, body: bodyStr });
+        }
+      } catch (sendErr: any) {
+        // NETWORK/EXCEPTION FAILURE - Apply backoff
+        const msg = String(sendErr && (sendErr.message || sendErr));
+        console.error('Telegram send exception', sendErr);
+        
+        const nextAttempts = currentAttempts + 1;
+        let newStatus = 'pending';
+        let nextAttemptAt = null;
+        let lastError = `send_exception: ${msg}`;
+        
+        if (nextAttempts >= maxAttempts) {
+            newStatus = 'failed'; // Permanently failed
+            lastError = `Max attempts (${maxAttempts}) reached. Last error: ${lastError}`;
+        } else {
+            // Exponential backoff: 2^attempts minutes
+            const backoffMinutes = Math.pow(2, nextAttempts);
+            const nextDt = DateTime.now().plus({ minutes: backoffMinutes });
+            nextAttemptAt = nextDt.toUTC().toISO();
+            lastError = `Attempt ${nextAttempts}/${maxAttempts} failed. Retrying in ${backoffMinutes} minutes. Error: ${lastError}`;
+        }
+
+        await supabaseServerClient.from('notifications').update({
+          status: newStatus,
+          attempts_count: nextAttempts,
+          next_attempt_at: nextAttemptAt,
+          last_error: lastError
+        }).eq('id', notif.id);
+        
+        return res.status(500).json({ error: 'Telegram send exception (retrying)', details: msg });
       }
     }
 
-    // If no TELEGRAM_BOT_TOKEN, fail gracefully or implement fallback to other provider here
-    console.warn('No TELEGRAM_BOT_TOKEN set - cannot deliver notification via Telegram');
-    return res.status(500).json({ error: 'No telegram token configured' });
-
-  } catch (e) {
-    console.error('General error in wf_send_notification_job handler:', e);
-    return res.status(500).json({ error: 'Internal Server Error', details: (e && e.message) ? e.message : String(e) });
+    // fallback if TELEGRAM_BOT_TOKEN not configured
+    return res.status(500).json({ error: 'No TELEGRAM_BOT_TOKEN configured' });
+  } catch (err: any) {
+    console.error('wf_send_notification_job handler error', err);
+    return res.status(500).json({ error: 'Internal Server Error', details: String(err) });
   }
 }

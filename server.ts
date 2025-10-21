@@ -1,10 +1,11 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import logoSearch from './src/pages/api/action_logo_search.ts';
 import createSub from './src/pages/api/action_create_subscription.ts';
 import wfSend from './src/pages/api/wf_send_notification_job.ts';
+import wfDispatch from './src/pages/api/wf_notification_dispatcher.ts'; // Import new dispatcher
 
 // simple ping
-const ping = (req:any, res:any) => res.json({ ok: true, now: new Date().toISOString() });
+const ping = (_req: Request, res: Response) => res.json({ ok: true, now: new Date().toISOString() });
 
 const app = express();
 app.use(express.json());
@@ -13,14 +14,19 @@ app.use(express.json());
 app.get('/api/ping', ping);
 
 // If the imported handlers are default functions (req,res), call them directly.
-app.post('/api/action_logo_search', (req, res) => {
+app.post('/api/action_logo_search', (req: Request, res: Response) => {
   return (logoSearch as any)(req, res);
 });
-app.post('/api/action_create_subscription', (req, res) => {
+app.post('/api/action_create_subscription', (req: Request, res: Response) => {
   return (createSub as any)(req, res);
 });
-app.post('/api/wf_send_notification_job', (req, res) => {
+app.post('/api/wf_send_notification_job', (req: Request, res: Response) => {
   return (wfSend as any)(req, res);
+});
+
+// New dispatcher endpoint (GET request, suitable for scheduling)
+app.get('/api/wf_notification_dispatcher', (req: Request, res: Response) => {
+  return (wfDispatch as any)(req, res);
 });
 
 const port = process.env.PORT ? Number(process.env.PORT) : 32100;
