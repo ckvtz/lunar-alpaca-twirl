@@ -7,46 +7,64 @@ on:
 
 jobs:
   setup:
+    name: setup
     runs-on: ubuntu-latest
     outputs:
-      pnpm: ${{ steps.pnpm_outcome.outputs.pnpm_version }}
+      pnpm_available: ${{ steps.pnpm_check.outputs.pnpm_available }}
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node
+      - name: Setup Node (v20)
         uses: actions/setup-node@v4
-        with: node-version: 20
-      - name: Enable corepack and install pnpm
-        id: pnpm_outcome
+        with:
+          node-version: 20
+      - name: Enable corepack + install pnpm
+        id: pnpm_check
         run: |
+          # enable corepack (provides pnpm)
           corepack enable
           corepack prepare pnpm@latest --activate
-          pnpm --version
-        outputs:
-          pnpm_version: ${{ steps.pnpm_outcome.outputs.pnpm_version || 'ok' }}
+          pnpm --version && echo "pnpm_available=true" >> $GITHUB_OUTPUT
+        shell: bash
 
   install:
+    name: install-deps
     needs: setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: pnpm install
+      - name: Use node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies (pnpm)
+        run: |
+          # ensure corepack/pnpm are active in this job
+          corepack enable
+          corepack prepare pnpm@latest --activate
+          pnpm install
+        shell: bash
 
   notify:
+    name: notify
     needs: install
     runs-on: ubuntu-latest
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:
-      - name: Send Telegram notification
+      - uses: actions/checkout@v4
+      - name: Send Telegram notification (post-build)
         run: |
           if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "Telegram secrets missing - skipping"
+            echo "Telegram secrets are not set; skipping notify."
             exit 0
           fi
-          MESSAGE="✅ CI finished for $GITHUB_REPOSITORY@$GITHUB_SHA"
+          # short, single-line message
+          MESSAGE="✅ CI finished for $GITHUB_REPOSITORY@${GITHUB_SHA::7} on branch $GITHUB_REF_NAME"
+          # call Telegram API
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
             -d text="$MESSAGE" \
-            -d disable_web_page_preview=true
+            -d disable_web_page_preview=true \
+            -o /tmp/tg.json -w "%{http_code}"
+        shell: bash
