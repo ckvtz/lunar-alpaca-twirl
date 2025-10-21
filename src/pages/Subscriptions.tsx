@@ -1,6 +1,5 @@
 import React from 'react';
 import SubscriptionList from '@/components/SubscriptionList';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { PlusCircle } from 'lucide-react';

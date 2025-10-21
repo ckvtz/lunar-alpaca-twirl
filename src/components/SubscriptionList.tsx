@@ -6,6 +6,8 @@ import { DollarSign, Calendar, Repeat, Bell, Link as LinkIcon } from 'lucide-rea
 import { format } from 'date-fns';
 import { Subscription } from '@/types/subscription';
 import { Badge } from '@/components/ui/badge';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 const SubscriptionCard: React.FC<{ subscription: Subscription }> = ({ subscription }) => {
   const nextPaymentDate = format(new Date(subscription.next_payment_date), 'MMM dd, yyyy');
