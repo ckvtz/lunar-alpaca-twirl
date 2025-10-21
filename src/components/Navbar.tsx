@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/contexts/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Home, PlusCircle, Settings } from 'lucide-react';
+import { LogOut, Home, PlusCircle, Settings, Activity } from 'lucide-react';
 import { showSuccess, showError } from '@/utils/toast';
 
 const Navbar: React.FC = () => {
@@ -33,6 +33,12 @@ const Navbar: React.FC = () => {
                 <Button variant="ghost" size="sm" className="flex items-center space-x-2">
                   <PlusCircle className="h-4 w-4" />
                   <span className="hidden sm:inline">Add Subscription</span>
+                </Button>
+              </Link>
+              <Link to="/monitoring">
+                <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                  <Activity className="h-4 w-4" />
+                  <span className="hidden sm:inline">Monitoring</span>
                 </Button>
               </Link>
               <Link to="/settings/contacts">

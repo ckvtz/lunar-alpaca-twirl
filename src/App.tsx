@@ -12,7 +12,8 @@ import NotFound from "./pages/NotFound";
 import CreateSubscription from "./pages/CreateSubscription";
 import Subscriptions from "./pages/Subscriptions";
 import ContactManagement from "./pages/ContactManagement";
-import EditSubscription from "./pages/EditSubscription"; // Import new page
+import EditSubscription from "./pages/EditSubscription";
+import Monitoring from "./pages/Monitoring"; // Import new page
 
 const queryClient = new QueryClient();
 
@@ -34,8 +35,9 @@ const App = () => (
                   <Route path="/" element={<Index />} />
                   <Route path="/subscriptions" element={<Subscriptions />} />
                   <Route path="/subscriptions/new" element={<CreateSubscription />} />
-                  <Route path="/subscriptions/:id/edit" element={<EditSubscription />} /> {/* New Edit Route */}
+                  <Route path="/subscriptions/:id/edit" element={<EditSubscription />} />
                   <Route path="/settings/contacts" element={<ContactManagement />} />
+                  <Route path="/monitoring" element={<Monitoring />} /> {/* New Monitoring Route */}
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 </Route>
 
