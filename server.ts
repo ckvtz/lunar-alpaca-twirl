@@ -1,8 +1,10 @@
 import express, { Request, Response } from 'express';
 import logoSearch from './src/pages/api/action_logo_search.ts';
 import createSub from './src/pages/api/action_create_subscription.ts';
+import updateSub from './src/pages/api/action_update_subscription.ts';
+import deleteSub from './src/pages/api/action_delete_subscription.ts'; // Import new delete action
 import wfSend from './src/pages/api/wf_send_notification_job.ts';
-import wfDispatch from './src/pages/api/wf_notification_dispatcher.ts'; // Import new dispatcher
+import wfDispatch from './src/pages/api/wf_notification_dispatcher.ts';
 
 // simple ping
 const ping = (_req: Request, res: Response) => res.json({ ok: true, now: new Date().toISOString() });
@@ -19,6 +21,12 @@ app.post('/api/action_logo_search', (req: Request, res: Response) => {
 });
 app.post('/api/action_create_subscription', (req: Request, res: Response) => {
   return (createSub as any)(req, res);
+});
+app.post('/api/action_update_subscription', (req: Request, res: Response) => {
+  return (updateSub as any)(req, res);
+});
+app.post('/api/action_delete_subscription', (req: Request, res: Response) => {
+  return (deleteSub as any)(req, res); // New delete route
 });
 app.post('/api/wf_send_notification_job', (req: Request, res: Response) => {
   return (wfSend as any)(req, res);
