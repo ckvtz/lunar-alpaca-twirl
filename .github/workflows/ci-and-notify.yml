@@ -6,47 +6,46 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
-
+    outputs:
+      pnpm: ${{ steps.pnpm_outcome.outputs.pnpm_version }}
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
+      - uses: actions/checkout@v4
+      - name: Setup Node
         uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # ✅ Fix: enable corepack and install pnpm
+        with: node-version: 20
       - name: Enable corepack and install pnpm
+        id: pnpm_outcome
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
           pnpm --version
+        outputs:
+          pnpm_version: ${{ steps.pnpm_outcome.outputs.pnpm_version || 'ok' }}
 
+  install:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Install dependencies
         run: pnpm install
 
-      # (Optional) Add your build step if needed
-      # - name: Build project
-      #   run: pnpm build
-
-      # ✅ Telegram notification after build
-      - name: Notify via Telegram
-        if: always()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  notify:
+    needs: install
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Send Telegram notification
         run: |
           if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "❌ Telegram secrets not configured. Skipping notification."
+            echo "Telegram secrets missing - skipping"
             exit 0
           fi
-
-          MESSAGE="✅ CI completed for commit $GITHUB_SHA on branch $GITHUB_REF_NAME"
-          echo "Sending Telegram message: $MESSAGE"
-
+          MESSAGE="✅ CI finished for $GITHUB_REPOSITORY@$GITHUB_SHA"
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
             -d text="$MESSAGE" \
