@@ -10,28 +10,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    outputs:
-      commit: ${{ steps.get_sha.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node (20)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Enable corepack (allows pnpm)
-        run: corepack enable
+      - name: Enable corepack and prepare pnpm (robust)
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+          pnpm -v
 
-      - name: Install dependencies (pnpm)
+      - name: Install dependencies
         run: pnpm install
 
       - name: Build (optional)
         run: pnpm run build || echo "no build step"
-
-      - name: Get commit sha
-        id: get_sha
-        run: echo "::set-output name=sha::${GITHUB_SHA::8}"
 
   notify:
     needs: build
