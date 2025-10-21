@@ -1,49 +1,53 @@
-name: CI + Telegram Notify
+name: CI + Telegram post-build notification
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Setup Node (20)
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
 
-      - name: Enable corepack and prepare pnpm (robust)
+      # ✅ Fix: enable corepack and install pnpm
+      - name: Enable corepack and install pnpm
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
-          pnpm -v
+          pnpm --version
 
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build (optional)
-        run: pnpm run build || echo "no build step"
+      # (Optional) Add your build step if needed
+      # - name: Build project
+      #   run: pnpm build
 
-  notify:
-    needs: build
-    runs-on: ubuntu-latest
-    if: ${{ secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != '' }}
-    steps:
-      - name: Send Telegram test message
+      # ✅ Telegram notification after build
+      - name: Notify via Telegram
+        if: always()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          MESSAGE="✅ CI passed for $GITHUB_REPOSITORY (branch: $GITHUB_REF_NAME) — commit ${GITHUB_SHA::8}"
-          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          PAYLOAD=$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE\n\nRun: $RUN_URL\nActor: $GITHUB_ACTOR" '{chat_id:$chat_id, text:$text, disable_web_page_preview:true}')
-          echo "Sending Telegram notification..."
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "❌ Telegram secrets not configured. Skipping notification."
+            exit 0
+          fi
+
+          MESSAGE="✅ CI completed for commit $GITHUB_SHA on branch $GITHUB_REF_NAME"
+          echo "Sending Telegram message: $MESSAGE"
+
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD" | jq .
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="$MESSAGE" \
+            -d disable_web_page_preview=true
