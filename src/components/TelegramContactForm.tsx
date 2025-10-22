@@ -9,7 +9,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { useTelegramContactStatus } from '@/hooks/use-telegram-contact-status';
 
-const TELEGRAM_BOT_USERNAME = '@SubscriptionGuardBot'; // Placeholder
+// NOTE: This should be configured by the user based on their deployed bot.
+const TELEGRAM_BOT_USERNAME = '@YOUR_BOT_USERNAME'; 
 
 const TelegramContactForm: React.FC = () => {
   const { user } = useSession();
@@ -86,6 +87,15 @@ const TelegramContactForm: React.FC = () => {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {TELEGRAM_BOT_USERNAME === '@YOUR_BOT_USERNAME' && (
+            <Alert variant="destructive" className="mb-4">
+                <AlertTitle>Configuration Required</AlertTitle>
+                <AlertDescription>
+                    Please update the <code>TELEGRAM_BOT_USERNAME</code> constant in <code>src/components/TelegramContactForm.tsx</code> with your actual Telegram bot's username.
+                </AlertDescription>
+            </Alert>
+        )}
+
         {existingContactId ? (
           <Alert className="bg-green-50 dark:bg-green-900/20 border-green-500 text-green-700 dark:text-green-300">
             <Link className="h-4 w-4" />
