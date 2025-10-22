@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useProfile } from '@/hooks/use-profile';
 import { DateTime } from 'luxon';
+import { useCategories } from '@/hooks/use-categories';
+import CategoryIconDisplay from './CategoryIconDisplay';
 
 interface SubscriptionListProps {
   queryOptions: {
@@ -20,7 +22,13 @@ interface SubscriptionListProps {
   };
 }
 
-const SubscriptionCard: React.FC<{ subscription: Subscription, userTimezone: string }> = ({ subscription, userTimezone }) => {
+interface SubscriptionCardProps { 
+    subscription: Subscription; 
+    userTimezone: string; 
+    categoryIconName: string | null;
+}
+
+const SubscriptionCard: React.FC<SubscriptionCardProps> = ({ subscription, userTimezone, categoryIconName }) => {
   const nextPaymentDate = DateTime.fromISO(subscription.next_payment_date, { zone: 'utc' }).setZone(userTimezone);
   const formattedDate = nextPaymentDate.toFormat('MMM dd, yyyy');
   const serviceUrl = subscription.service_url;
@@ -41,7 +49,8 @@ const SubscriptionCard: React.FC<{ subscription: Subscription, userTimezone: str
               />
             ) : (
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <DollarSign className="h-4 w-4 mr-2" />
+                {/* Use CategoryIconDisplay, falling back to DollarSign if categoryIconName is null */}
+                <CategoryIconDisplay iconName={categoryIconName} className="h-4 w-4 text-primary" />
               </div>
             )}
             <CardTitle className="text-xl font-semibold">{subscription.name}</CardTitle>
@@ -109,8 +118,21 @@ const SubscriptionCard: React.FC<{ subscription: Subscription, userTimezone: str
 const SubscriptionList: React.FC<SubscriptionListProps> = ({ queryOptions }) => {
   const { data: subscriptions, isLoading, isError } = useSubscriptions(queryOptions);
   const { data: profile, isLoading: isLoadingProfile } = useProfile();
+  const { data: categories, isLoading: isLoadingCategories } = useCategories();
 
-  if (isLoading || isLoadingProfile) {
+  // Create a map for quick icon lookup
+  const categoryIconMap = React.useMemo(() => {
+    if (!categories) return {};
+    return categories.reduce((acc, cat) => {
+        if (cat.name) {
+            acc[cat.name] = cat.icon;
+        }
+        return acc;
+    }, {} as Record<string, string | null>);
+  }, [categories]);
+
+
+  if (isLoading || isLoadingProfile || isLoadingCategories) {
     return (
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {[...Array(3)].map((_, i) => (
@@ -150,7 +172,12 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({ queryOptions }) => 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {subscriptions.map((sub) => (
-        <SubscriptionCard key={sub.id} subscription={sub} userTimezone={userTimezone} />
+        <SubscriptionCard 
+          key={sub.id} 
+          subscription={sub} 
+          userTimezone={userTimezone} 
+          categoryIconName={sub.category ? categoryIconMap[sub.category] : null} 
+        />
       ))}
     </div>
   );
