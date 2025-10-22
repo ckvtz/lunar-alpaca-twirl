@@ -1,4 +1,4 @@
-import { supabaseServerClient } from './supabase_server_client.ts';
+import { supabaseServerClient } from './supabase_server_client';
 
 /**
  * action_monitor_status.ts
