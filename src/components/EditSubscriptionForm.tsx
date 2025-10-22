@@ -288,14 +288,17 @@ const EditSubscriptionForm: React.FC<EditSubscriptionFormProps> = ({ initialData
               {isLoadingCategories ? (
                 <Skeleton className="h-10 w-full" />
               ) : (
-                <Select onValueChange={field.onChange} value={field.value || ''}>
+                <Select 
+                  onValueChange={(value) => field.onChange(value === '__none__' ? null : value)} 
+                  value={field.value || '__none__'}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="__none__">None</SelectItem>
                     {categories?.map(cat => (
                       <SelectItem key={cat.id} value={cat.name}>
                         {cat.name}
