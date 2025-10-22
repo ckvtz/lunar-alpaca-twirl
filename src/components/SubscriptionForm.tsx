@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Loader2, Search } from 'lucide-react';
+import { CalendarIcon, Loader2, Search, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useSession } from '@/contexts/SessionContext';
 import { showSuccess, showError } from '@/utils/toast';
 import { useCategories } from '@/hooks/use-categories';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // --- Schema Definition ---
 const SubscriptionSchema = z.object({
@@ -53,7 +54,7 @@ const defaultValues: SubscriptionFormValues = {
 
 const SubscriptionForm: React.FC = () => {
   const { user } = useSession();
-  const { data: categories, isLoading: isLoadingCategories } = useCategories();
+  const { data: categories, isLoading: isLoadingCategories, isError: isCategoryError, error: categoryError } = useCategories();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [logoSearchQuery, setLogoSearchQuery] = useState('');
   const [logoSearchResults, setLogoSearchResults] = useState<{ name: string, logo_url: string }[]>([]);
@@ -138,6 +139,16 @@ const SubscriptionForm: React.FC = () => {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
+        {isCategoryError && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Data Loading Error</AlertTitle>
+            <AlertDescription>
+              Failed to load categories. This might be due to a server configuration issue. ({categoryError?.message})
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Subscription Name & Logo Search */}
         <FormField
           control={form.control}
@@ -235,7 +246,7 @@ const SubscriptionForm: React.FC = () => {
               {isLoadingCategories ? (
                 <Skeleton className="h-10 w-full" />
               ) : (
-                <Select onValueChange={field.onChange} defaultValue={field.value || ''}>
+                <Select onValueChange={field.onChange} defaultValue={field.value || ''} disabled={isCategoryError}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
