@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import handler from '../action_create_subscription';
-import { supabaseServerClient } from '@/server/supabase_server_client'; // This will be mocked
+import { supabaseServerClient } from '../supabase_server_client'; // Corrected import path
 import { DateTime } from 'luxon';
 
 // Mock the supabaseServerClient module
-vi.mock('@/server/supabase_server_client', () => {
+vi.mock('../supabase_server_client', () => {
   const mockClient = {
     from: vi.fn(() => mockClient),
     select: vi.fn(() => mockClient),
