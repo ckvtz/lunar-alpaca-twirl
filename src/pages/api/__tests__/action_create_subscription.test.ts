@@ -28,7 +28,7 @@ vi.mock('@/server/supabase_server_client', () => {
 
 // Mock Luxon's DateTime.now() for consistent testing
 const MOCK_NOW = '2025-10-20T10:00:00.000Z';
-vi.spyOn(DateTime, 'now').mockReturnValue(DateTime.fromISO(MOCK_NOW));
+vi.spyOn(DateTime, 'now').mockReturnValue(DateTime.fromISO(MOCK_NOW).toUTC() as DateTime<true>);
 
 describe('action_create_subscription', () => {
   const mockReq = (body: any) => ({ method: 'POST', body });
