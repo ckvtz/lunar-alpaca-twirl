@@ -43,6 +43,6 @@ export const useMonitorStatus = () => {
   return useQuery<MonitorStatusResponse, Error>({
     queryKey: ['monitorStatus'],
     queryFn: fetchMonitorStatus,
-    refetchInterval: 15000, // Refetch every 15 seconds for live monitoring
+    refetchInterval: 60000, // Refetch every 60 seconds (1 minute)
   });
 };
