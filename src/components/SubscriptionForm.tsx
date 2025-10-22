@@ -195,7 +195,7 @@ const SubscriptionForm: React.FC = () => {
                 <Input 
                   placeholder="https://example.com/logo.png" 
                   {...field} 
-                  value={field.value ?? ''}
+                  value={field.value ?? ''} // Ensure value is string
                 />
               </FormControl>
               <FormMessage />
@@ -214,7 +214,7 @@ const SubscriptionForm: React.FC = () => {
                 <Input 
                   placeholder="https://netflix.com" 
                   {...field} 
-                  value={field.value ?? ''}
+                  value={field.value ?? ''} // Ensure value is string
                 />
               </FormControl>
               <FormMessage />
@@ -412,7 +412,7 @@ const SubscriptionForm: React.FC = () => {
                 <Textarea 
                   placeholder="Any specific details about this subscription..." 
                   {...field} 
-                  value={field.value ?? ''}
+                  value={field.value ?? ''} // Ensure value is string
                 />
               </FormControl>
               <FormMessage />
