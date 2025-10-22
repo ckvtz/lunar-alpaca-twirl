@@ -1,7 +1,7 @@
 import { supabaseServerClient } from './supabase_server_client.ts';
 
 /**
- * action_monitor_status.ts
+ * monitor_status.ts
  * Fetches recent notifications and attempts to fetch cron job run details for monitoring.
  */
 
