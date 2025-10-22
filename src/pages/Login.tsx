@@ -3,18 +3,25 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 import { useSession } from '@/contexts/SessionContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const Login: React.FC = () => {
   const { user } = useSession();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  // Redirect authenticated users to the home page
+  // Redirect authenticated users to the home page and clear URL parameters
   useEffect(() => {
     if (user) {
-      navigate('/', { replace: true });
+      // Clear any lingering Supabase auth parameters from the URL before redirecting
+      if (searchParams.has('error') || searchParams.has('error_code') || searchParams.has('error_description')) {
+        // Navigate without replacing history to clear the parameters
+        navigate('/', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
     }
-  }, [user, navigate]);
+  }, [user, navigate, searchParams]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
