@@ -35,9 +35,12 @@ const SubscriptionSchema = z.object({
 
 type SubscriptionFormValues = z.infer<typeof SubscriptionSchema>;
 
-const defaultValues: Partial<SubscriptionFormValues> = {
+const defaultValues: SubscriptionFormValues = {
+  name: '',
   renewal_price: 0,
   currency: 'USD',
+  // Initialize date to today to satisfy the required z.date() schema
+  next_payment_date: new Date(), 
   billing_cycle: 'monthly',
   reminder_offset: '1d',
   notification_mode: 'telegram',
