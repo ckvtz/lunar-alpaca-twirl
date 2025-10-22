@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/contexts/SessionContext';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Home, PlusCircle, Settings, Activity } from 'lucide-react';
+import { LogOut, Home, PlusCircle, Activity } from 'lucide-react';
 import { showSuccess, showError } from '@/utils/toast';
+import SettingsDropdown from './SettingsDropdown'; // Import the new component
 
 const Navbar: React.FC = () => {
   const { user } = useSession();
@@ -41,12 +42,10 @@ const Navbar: React.FC = () => {
                   <span className="hidden sm:inline">Monitoring</span>
                 </Button>
               </Link>
-              <Link to="/settings/contacts">
-                <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                  <Settings className="h-4 w-4" />
-                  <span className="hidden sm:inline">Settings</span>
-                </Button>
-              </Link>
+              
+              {/* Use the new Settings Dropdown */}
+              <SettingsDropdown />
+
               <span className="text-sm text-muted-foreground hidden lg:inline">
                 {user.email}
               </span>

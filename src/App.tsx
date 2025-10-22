@@ -13,7 +13,8 @@ import CreateSubscription from "./pages/CreateSubscription";
 import Subscriptions from "./pages/Subscriptions";
 import ContactManagement from "./pages/ContactManagement";
 import EditSubscription from "./pages/EditSubscription";
-import Monitoring from "./pages/Monitoring"; // Import new page
+import Monitoring from "./pages/Monitoring";
+import Profile from "./pages/Profile"; // Import new page
 
 const queryClient = new QueryClient();
 
@@ -37,7 +38,8 @@ const App = () => (
                   <Route path="/subscriptions/new" element={<CreateSubscription />} />
                   <Route path="/subscriptions/:id/edit" element={<EditSubscription />} />
                   <Route path="/settings/contacts" element={<ContactManagement />} />
-                  <Route path="/monitoring" element={<Monitoring />} /> {/* New Monitoring Route */}
+                  <Route path="/settings/profile" element={<Profile />} /> {/* New Profile Route */}
+                  <Route path="/monitoring" element={<Monitoring />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 </Route>
 
