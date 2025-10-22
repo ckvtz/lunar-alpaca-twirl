@@ -30,20 +30,26 @@ async function sendViaTelegram(chatId: string | number, text: string) {
 }
 
 /**
- * send message via Email API endpoint
+ * send message via Email API endpoint or use a mock if not configured.
  */
 async function sendViaEmail(toEmail: string, subject: string, body: string) {
-  if (!EMAIL_API_ENDPOINT) {
-    throw new Error('EMAIL_API_ENDPOINT not set in environment.');
-  }
-  
-  // This is a placeholder for calling an external email service API
   const payload = {
     to: toEmail,
     subject: subject,
     body: body,
   };
 
+  if (!EMAIL_API_ENDPOINT) {
+    // MOCK IMPLEMENTATION for development/testing
+    console.log('--- MOCK EMAIL SENT ---');
+    console.log(`TO: ${toEmail}`);
+    console.log(`SUBJECT: ${subject}`);
+    console.log(`BODY: ${body.substring(0, 100)}...`);
+    console.log('-----------------------');
+    return { ok: true, status: 200, body: 'Mock email sent successfully.' };
+  }
+  
+  // Production implementation: call external email service API
   const resp = await fetch(EMAIL_API_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -126,7 +132,7 @@ export default async function handler(req: any, res: any) {
     // fetch the notification row and associated subscription data
     const { data: notif, error: fetchErr } = await supabaseServerClient
       .from('notifications')
-      .select('id, payload_json, status, attempts_count, max_attempts, next_attempt_at, subscriptions(notification_mode, name)')
+      .select('id, payload_json, status, attempts_count, max_attempts, next_attempt_at, subscriptions(notification_mode, name, service_url)')
       .eq('id', notification_id)
       .single();
 
@@ -158,6 +164,7 @@ export default async function handler(req: any, res: any) {
     const subscriptionDetails = (notif.subscriptions as any)?.[0];
     const notificationMode = subscriptionDetails?.notification_mode || 'telegram'; 
     const subscriptionName = subscriptionDetails?.name || 'Subscription';
+    const serviceUrl = subscriptionDetails?.service_url || null;
 
     // construct message text
     const title = payload.title || `Renewal Reminder: ${subscriptionName}`;
@@ -171,9 +178,9 @@ export default async function handler(req: any, res: any) {
     lines.push(`*${escapedTitle}*`);
     lines.push(escapedBody);
     
-    if (payload.meta?.url) {
+    if (serviceUrl) {
         // Telegram requires links to be formatted as [Text](URL)
-        const urlText = escapeMarkdownV2(payload.meta.url);
+        const urlText = escapeMarkdownV2(serviceUrl);
         lines.push(`[View Service](${urlText})`);
     }
     
@@ -201,7 +208,8 @@ export default async function handler(req: any, res: any) {
 
         if (userEmail) {
             try {
-                const email = await sendViaEmail(userEmail, title, body); // Email body doesn't need MarkdownV2 escaping
+                // Email body doesn't need MarkdownV2 escaping
+                const email = await sendViaEmail(userEmail, title, body); 
                 deliveryResult = { ok: email.ok, method: 'email', status: email.status, body: email.body };
             } catch (e: any) {
                 deliveryResult = { ok: false, method: 'email', error: `send_exception: ${e.message || String(e)}` };
