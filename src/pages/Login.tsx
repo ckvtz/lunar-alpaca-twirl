@@ -37,8 +37,15 @@ const Login: React.FC = () => {
             variables: {
               default: {
                 colors: {
+                  // Primary color (dark blue)
                   brand: 'hsl(var(--primary))',
-                  brandAccent: 'hsl(var(--primary-foreground))',
+                  // Accent color (used for hover/focus) - using a slightly darker primary shade
+                  // We will use the primary color itself, but rely on the Auth UI's internal logic 
+                  // to handle the hover state correctly, or explicitly set a darker shade.
+                  // Since we don't have a specific darker primary shade defined, let's use a slightly darker hue/saturation.
+                  // Primary: 222.2 47.4% 11.2%
+                  // Let's try 222.2 55% 8% for a darker hover state.
+                  brandAccent: 'hsl(222.2 55% 8%)', 
                 },
               },
             },
