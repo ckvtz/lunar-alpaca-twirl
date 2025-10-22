@@ -1,7 +1,7 @@
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import SupabaseConnectionTest from "@/components/SupabaseConnectionTest";
 import { useSession } from "@/contexts/SessionContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const { user } = useSession();
@@ -17,15 +17,14 @@ const Index = () => {
         <h1 className="text-4xl font-bold mb-4 text-gray-900 dark:text-gray-100">
           Welcome to SubscriptionGuard
         </h1>
-        <p className="text-xl text-gray-600 dark:text-gray-400">
-          Please sign in to manage your subscriptions.
+        <p className="text-xl text-gray-600 dark:text-gray-400 mb-6">
+          Track, manage, and never forget a payment again.
         </p>
+        <Link to="/login">
+          <Button size="lg">Get Started / Sign In</Button>
+        </Link>
       </div>
       
-      <div className="space-y-6 w-full max-w-lg">
-        <SupabaseConnectionTest />
-      </div>
-
       <div className="mt-auto pt-8">
         <MadeWithDyad />
       </div>
