@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, Bot, Link, RefreshCw, Trash2 } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
@@ -7,43 +7,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { useTelegramContactStatus } from '@/hooks/use-telegram-contact-status';
 
 const TELEGRAM_BOT_USERNAME = '@SubscriptionGuardBot'; // Placeholder
 
 const TelegramContactForm: React.FC = () => {
   const { user } = useSession();
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: contact, isLoading, refetch } = useTelegramContactStatus();
+  const existingContactId = contact?.contact_id || null;
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUnlinking, setIsUnlinking] = useState(false);
-  const [existingContactId, setExistingContactId] = useState<string | null>(null);
   const [linkToken, setLinkToken] = useState<string | null>(null);
-
-  const fetchExistingContact = async () => {
-    if (!user) return;
-    setIsLoading(true);
-    setLinkToken(null); // Clear token on refresh
-    
-    const { data, error } = await supabase
-      .from('user_contacts')
-      .select('contact_id')
-      .eq('user_id', user.id)
-      .eq('provider', 'telegram')
-      .limit(1)
-      .single();
-
-    if (data) {
-      setExistingContactId(data.contact_id);
-    } else if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
-      showError('Failed to load existing contact: ' + error.message);
-    } else {
-      setExistingContactId(null);
-    }
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    fetchExistingContact();
-  }, [user]);
 
   const handleGenerateToken = async () => {
     if (!user) {
@@ -89,8 +64,8 @@ const TelegramContactForm: React.FC = () => {
       showError('Failed to unlink contact: ' + error.message);
     } else {
       showSuccess('Telegram contact unlinked successfully.');
-      setExistingContactId(null);
       setLinkToken(null);
+      refetch(); // Refetch status via hook
     }
     setIsUnlinking(false);
   };
@@ -145,7 +120,7 @@ const TelegramContactForm: React.FC = () => {
             <p className="text-sm text-muted-foreground">
               This token is valid for 1 hour. Once the bot confirms the link, refresh this page.
             </p>
-            <Button variant="secondary" onClick={fetchExistingContact} className="w-full">
+            <Button variant="secondary" onClick={() => refetch()} className="w-full">
               <RefreshCw className="mr-2 h-4 w-4" /> Check Status / Refresh
             </Button>
           </div>
