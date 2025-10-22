@@ -10,12 +10,25 @@ import { useSession } from '@/contexts/SessionContext';
 import { showSuccess, showError } from '@/utils/toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// Simplified list of common timezones
+const TIMEZONES = [
+  'UTC',
+  'America/New_York',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Europe/Paris',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+];
 
 // --- Schema Definition ---
 const ProfileSchema = z.object({
-  first_name: z.string().min(1, { message: "First name is required." }).optional(),
-  last_name: z.string().min(1, { message: "Last name is required." }).optional(),
+  first_name: z.string().min(1, { message: "First name is required." }).optional().or(z.literal('')),
+  last_name: z.string().min(1, { message: "Last name is required." }).optional().or(z.literal('')),
   avatar_url: z.string().url({ message: "Must be a valid URL." }).optional().or(z.literal('')),
+  timezone: z.enum(TIMEZONES as [string, ...string[]], { required_error: "Timezone is required." }),
 });
 
 type ProfileFormValues = z.infer<typeof ProfileSchema>;
@@ -30,6 +43,7 @@ const ProfileForm: React.FC = () => {
       first_name: '',
       last_name: '',
       avatar_url: '',
+      timezone: 'UTC',
     },
   });
 
@@ -40,7 +54,7 @@ const ProfileForm: React.FC = () => {
     // RLS ensures only the user's profile is returned
     const { data, error } = await supabase
       .from('profiles')
-      .select('first_name, last_name, avatar_url')
+      .select('first_name, last_name, avatar_url, timezone')
       .eq('id', user.id)
       .limit(1)
       .single();
@@ -49,7 +63,8 @@ const ProfileForm: React.FC = () => {
       form.reset({ 
         first_name: data.first_name || '', 
         last_name: data.last_name || '', 
-        avatar_url: data.avatar_url || '' 
+        avatar_url: data.avatar_url || '',
+        timezone: data.timezone || 'UTC',
       });
     } else if (error && error.code !== 'PGRST116') { // PGRST116: No rows found (profile might not exist yet)
       showError('Failed to load profile: ' + error.message);
@@ -72,6 +87,7 @@ const ProfileForm: React.FC = () => {
       first_name: values.first_name || null,
       last_name: values.last_name || null,
       avatar_url: values.avatar_url || null,
+      timezone: values.timezone,
       updated_at: new Date().toISOString(),
     };
 
@@ -99,7 +115,7 @@ const ProfileForm: React.FC = () => {
           User Profile
         </CardTitle>
         <CardDescription>
-          Update your personal information.
+          Update your personal information and notification preferences.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -134,6 +150,29 @@ const ProfileForm: React.FC = () => {
               />
             </div>
             
+            <FormField
+              control={form.control}
+              name="timezone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Timezone</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select your timezone" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {TIMEZONES.map(tz => (
+                        <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="avatar_url"

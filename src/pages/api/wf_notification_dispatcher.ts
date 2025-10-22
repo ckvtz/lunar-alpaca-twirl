@@ -25,12 +25,15 @@ function simulateWorkerCall(notificationId: string) {
  * based on their billing cycle.
  */
 async function handleSubscriptionRenewal() {
+    // We check against the current UTC time.
     const now = DateTime.now().toUTC().toISO();
     
     // 1. Find subscriptions that are past due (next_payment_date < now)
+    // Note: next_payment_date is stored as YYYY-MM-DD. When comparing, we treat it as midnight UTC for simplicity 
+    // unless we explicitly load it with the subscription's timezone.
     const { data: overdueSubs, error: queryError } = await supabaseServerClient
         .from('subscriptions')
-        .select('id, next_payment_date, billing_cycle, timezone, created_by, name')
+        .select('id, next_payment_date, billing_cycle, timezone, created_by, name, reminder_offset')
         .lte('next_payment_date', now)
         .limit(50); // Process in batches
 
@@ -49,11 +52,21 @@ async function handleSubscriptionRenewal() {
     
     for (const sub of overdueSubs) {
         try {
-            const currentPaymentDate = DateTime.fromISO(sub.next_payment_date, { zone: sub.timezone || 'UTC' });
+            const subTimezone = sub.timezone || 'UTC';
+            
+            // Load the payment date using the subscription's timezone
+            let currentPaymentDate = DateTime.fromISO(sub.next_payment_date, { zone: subTimezone });
+            
+            // If the date is invalid (e.g., due to DST issues or bad data), skip or handle gracefully
+            if (!currentPaymentDate.isValid) {
+                console.error(`Invalid date for subscription ${sub.id}: ${sub.next_payment_date} in zone ${subTimezone}`);
+                continue;
+            }
+
             let nextPaymentDate = currentPaymentDate;
             
-            // Calculate the next payment date until it is in the future
-            while (nextPaymentDate <= DateTime.now()) {
+            // Calculate the next payment date until it is in the future (relative to the subscription's timezone)
+            while (nextPaymentDate <= DateTime.now().setZone(subTimezone)) {
                 if (sub.billing_cycle === 'monthly') {
                     nextPaymentDate = nextPaymentDate.plus({ months: 1 });
                 } else if (sub.billing_cycle === 'quarterly') {
@@ -63,7 +76,6 @@ async function handleSubscriptionRenewal() {
                 } else if (sub.billing_cycle === 'weekly') {
                     nextPaymentDate = nextPaymentDate.plus({ weeks: 1 });
                 } else {
-                    // Should not happen if schema is respected
                     console.warn(`Unknown billing cycle for subscription ${sub.id}: ${sub.billing_cycle}`);
                     break; 
                 }
@@ -76,7 +88,7 @@ async function handleSubscriptionRenewal() {
                 .from('subscriptions')
                 .update({ 
                     next_payment_date: newNextPaymentDate,
-                    updated_at: new Date().toISOString() // Assuming updated_at column exists (standard practice)
+                    updated_at: new Date().toISOString()
                 })
                 .eq('id', sub.id);
 
@@ -98,6 +110,42 @@ async function handleSubscriptionRenewal() {
                 },
                 created_at: new Date().toISOString()
             }]);
+
+            // 4. Create a new pending notification for the newly scheduled date
+            let scheduledDt = DateTime.fromISO(newNextPaymentDate, { zone: subTimezone });
+            
+            if (sub.reminder_offset && sub.reminder_offset !== 'none') {
+                if (sub.reminder_offset === '15m') scheduledDt = scheduledDt.minus({ minutes: 15 });
+                else if (sub.reminder_offset === '1h') scheduledDt = scheduledDt.minus({ hours: 1 });
+                else if (sub.reminder_offset === '1d') scheduledDt = scheduledDt.minus({ days: 1 });
+                else if (sub.reminder_offset === '1w') scheduledDt = scheduledDt.minus({ weeks: 1 });
+            }
+            
+            const scheduled = scheduledDt.toUTC().toISO();
+
+            const notifRow = {
+                subscription_id: sub.id,
+                scheduled_at: scheduled,
+                status: 'pending',
+                payload_json: {
+                    to: sub.created_by,
+                    title: `Subscription renewal — ${sub.name}`,
+                    body: `${sub.name} renews on ${newNextPaymentDate} (${subTimezone})`,
+                    subscription_id: sub.id,
+                    user_id: sub.created_by
+                },
+                created_at: new Date().toISOString(),
+                next_attempt_at: scheduled,
+            };
+
+            // Delete any existing pending notifications for this subscription before inserting the new one
+            await supabaseServerClient
+                .from('notifications')
+                .delete()
+                .eq('subscription_id', sub.id)
+                .eq('status', 'pending');
+
+            await supabaseServerClient.from('notifications').insert([notifRow]);
 
             renewedCount++;
         } catch (e) {

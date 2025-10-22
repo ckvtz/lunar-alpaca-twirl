@@ -10,6 +10,15 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+interface SubscriptionListProps {
+  queryOptions: {
+    sortBy?: 'name' | 'renewal_price' | 'next_payment_date';
+    sortOrder?: 'asc' | 'desc';
+    filterCategory?: string;
+    filterCycle?: 'monthly' | 'quarterly' | 'annually' | 'weekly';
+  };
+}
+
 const SubscriptionCard: React.FC<{ subscription: Subscription }> = ({ subscription }) => {
   const nextPaymentDate = format(new Date(subscription.next_payment_date), 'MMM dd, yyyy');
   const serviceUrl = subscription.service_url;
@@ -95,8 +104,8 @@ const SubscriptionCard: React.FC<{ subscription: Subscription }> = ({ subscripti
   );
 };
 
-const SubscriptionList: React.FC = () => {
-  const { data: subscriptions, isLoading, isError } = useSubscriptions();
+const SubscriptionList: React.FC<SubscriptionListProps> = ({ queryOptions }) => {
+  const { data: subscriptions, isLoading, isError } = useSubscriptions(queryOptions);
 
   if (isLoading) {
     return (

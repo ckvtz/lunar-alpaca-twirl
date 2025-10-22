@@ -7,8 +7,8 @@ const Index = () => {
   const { user } = useSession();
 
   if (user) {
-    // Redirect authenticated users to the main subscriptions page
-    return <Navigate to="/subscriptions" replace />;
+    // Redirect authenticated users to the main dashboard page
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (

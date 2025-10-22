@@ -14,7 +14,8 @@ import Subscriptions from "./pages/Subscriptions";
 import ContactManagement from "./pages/ContactManagement";
 import EditSubscription from "./pages/EditSubscription";
 import Monitoring from "./pages/Monitoring";
-import Profile from "./pages/Profile"; // Import new page
+import Profile from "./pages/Profile";
+import Dashboard from "./pages/Dashboard"; // Import new Dashboard page
 
 const queryClient = new QueryClient();
 
@@ -30,15 +31,16 @@ const App = () => (
             <main className="flex-grow">
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/" element={<Index />} /> {/* Index handles redirect based on auth status */}
                 
                 {/* Protected Routes */}
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/" element={<Index />} />
+                  <Route path="/dashboard" element={<Dashboard />} /> {/* New Dashboard Route */}
                   <Route path="/subscriptions" element={<Subscriptions />} />
                   <Route path="/subscriptions/new" element={<CreateSubscription />} />
                   <Route path="/subscriptions/:id/edit" element={<EditSubscription />} />
                   <Route path="/settings/contacts" element={<ContactManagement />} />
-                  <Route path="/settings/profile" element={<Profile />} /> {/* New Profile Route */}
+                  <Route path="/settings/profile" element={<Profile />} />
                   <Route path="/monitoring" element={<Monitoring />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 </Route>

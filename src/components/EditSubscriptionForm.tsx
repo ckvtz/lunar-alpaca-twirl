@@ -28,6 +28,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useCategories } from '@/hooks/use-categories';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // --- Schema Definition (Updated to allow null for optional strings) ---
 const SubscriptionSchema = z.object({
@@ -53,6 +55,7 @@ interface EditSubscriptionFormProps {
 
 const EditSubscriptionForm: React.FC<EditSubscriptionFormProps> = ({ initialData }) => {
   const { user } = useSession();
+  const { data: categories, isLoading: isLoadingCategories } = useCategories();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,6 +71,11 @@ const EditSubscriptionForm: React.FC<EditSubscriptionFormProps> = ({ initialData
     billing_cycle: initialData.billing_cycle,
     reminder_offset: initialData.reminder_offset || 'none',
     notification_mode: initialData.notification_mode,
+    category: initialData.category || null, // Ensure null is handled
+    logo_url: initialData.logo_url || null,
+    service_url: initialData.service_url || null,
+    payment_method: initialData.payment_method || null,
+    notes: initialData.notes || null,
   };
 
   const form = useForm<SubscriptionFormValues>({
@@ -115,6 +123,12 @@ const EditSubscriptionForm: React.FC<EditSubscriptionFormProps> = ({ initialData
       next_payment_date: format(values.next_payment_date, 'yyyy-MM-dd'),
       renewal_price: values.renewal_price.toFixed(2),
       user_id: user.id, // Pass user ID for RLS and audit logging
+      // Ensure null values are passed correctly for optional fields
+      category: values.category || null,
+      logo_url: values.logo_url || null,
+      service_url: values.service_url || null,
+      payment_method: values.payment_method || null,
+      notes: values.notes || null,
     };
 
     try {
@@ -259,6 +273,37 @@ const EditSubscriptionForm: React.FC<EditSubscriptionFormProps> = ({ initialData
                   value={field.value ?? ''} // Fix: Convert null to empty string
                 />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Category Select */}
+        <FormField
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Category (Optional)</FormLabel>
+              {isLoadingCategories ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select onValueChange={field.onChange} value={field.value || ''}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {categories?.map(cat => (
+                      <SelectItem key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <FormMessage />
             </FormItem>
           )}

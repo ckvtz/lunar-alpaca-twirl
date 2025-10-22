@@ -17,7 +17,7 @@ export default async function handler(req: any, res: any) {
     const subscriptionId = payload.id;
     const userId = payload.user_id;
 
-    // 1. Fetch old data for audit logging
+    // 1. Fetch old data for audit logging and current timezone
     const { data: oldSub, error: fetchErr } = await supabaseServerClient
       .from('subscriptions')
       .select('*')
@@ -29,6 +29,9 @@ export default async function handler(req: any, res: any) {
       console.error('Subscription fetch error or not found/owned:', fetchErr);
       return res.status(404).json({ error: 'Subscription not found or unauthorized.' });
     }
+
+    // Use existing timezone if not provided in payload (client doesn't send it yet, but we keep it)
+    const subTimezone = oldSub.timezone || 'UTC'; 
 
     // 2. Prepare update row
     const updateRow: any = {
@@ -42,7 +45,7 @@ export default async function handler(req: any, res: any) {
       currency: payload.currency,
       payment_method: payload.payment_method || null,
       notes: payload.notes || null,
-      timezone: payload.timezone || 'UTC',
+      timezone: subTimezone, // Keep existing timezone
       valid_until: payload.valid_until || null,
       reminder_offset: payload.reminder_offset || null,
       notification_mode: payload.notification_mode,
@@ -80,15 +83,18 @@ export default async function handler(req: any, res: any) {
       .eq('subscription_id', subscriptionId)
       .eq('status', 'pending');
 
-    // Create a new pending notification based on updated data (logic copied from action_create_subscription)
-    let scheduled = updatedSub.next_payment_date;
-    if (updatedSub.reminder_offset) {
-      const dt = DateTime.fromISO(updatedSub.next_payment_date, { zone: updatedSub.timezone || 'UTC' });
-      if (updatedSub.reminder_offset === '15m') scheduled = dt.minus({ minutes: 15 }).toUTC().toISO();
-      else if (updatedSub.reminder_offset === '1h') scheduled = dt.minus({ hours: 1 }).toUTC().toISO();
-      else if (updatedSub.reminder_offset === '1d') scheduled = dt.minus({ days: 1 }).toUTC().toISO();
-      else if (updatedSub.reminder_offset === '1w') scheduled = dt.minus({ weeks: 1 }).toUTC().toISO();
+    // Create a new pending notification based on updated data
+    const updatedSubTimezone = updatedSub.timezone || 'UTC';
+    let scheduledDt = DateTime.fromISO(updatedSub.next_payment_date, { zone: updatedSubTimezone });
+    
+    if (updatedSub.reminder_offset && updatedSub.reminder_offset !== 'none') {
+      if (updatedSub.reminder_offset === '15m') scheduledDt = scheduledDt.minus({ minutes: 15 });
+      else if (updatedSub.reminder_offset === '1h') scheduledDt = scheduledDt.minus({ hours: 1 });
+      else if (updatedSub.reminder_offset === '1d') scheduledDt = scheduledDt.minus({ days: 1 });
+      else if (updatedSub.reminder_offset === '1w') scheduledDt = scheduledDt.minus({ weeks: 1 });
     }
+    
+    const scheduled = scheduledDt.toUTC().toISO();
 
     const notifRow = {
       subscription_id: updatedSub.id,
@@ -97,11 +103,12 @@ export default async function handler(req: any, res: any) {
       payload_json: {
         to: userId,
         title: `Subscription renewal — ${updatedSub.name}`,
-        body: `${updatedSub.name} renews on ${updatedSub.next_payment_date}`,
+        body: `${updatedSub.name} renews on ${updatedSub.next_payment_date} (${updatedSubTimezone})`,
         subscription_id: updatedSub.id,
         user_id: userId
       },
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      next_attempt_at: scheduled, // Initial attempt time is the scheduled time
     };
 
     await supabaseServerClient.from('notifications').insert([notifRow]);

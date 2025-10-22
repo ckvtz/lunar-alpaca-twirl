@@ -14,6 +14,8 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useSession } from '@/contexts/SessionContext';
 import { showSuccess, showError } from '@/utils/toast';
+import { useCategories } from '@/hooks/use-categories';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // --- Schema Definition ---
 const SubscriptionSchema = z.object({
@@ -22,13 +24,13 @@ const SubscriptionSchema = z.object({
   currency: z.string().min(1, { message: "Currency is required." }),
   next_payment_date: z.date({ required_error: "Next payment date is required." }),
   billing_cycle: z.enum(["monthly", "quarterly", "annually", "weekly"]),
-  category: z.string().optional(),
-  logo_url: z.string().url().optional().or(z.literal('')),
-  service_url: z.string().url().optional().or(z.literal('')),
-  payment_method: z.string().optional(),
-  notes: z.string().optional(),
+  category: z.string().optional().nullable(),
+  logo_url: z.string().url().optional().or(z.literal('')).nullable(),
+  service_url: z.string().url().optional().or(z.literal('')).nullable(),
+  payment_method: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
   reminder_offset: z.enum(["none", "15m", "1h", "1d", "1w"]),
-  notification_mode: z.enum(["telegram", "email"]), // Assuming we only support these two for now
+  notification_mode: z.enum(["telegram", "email"]),
 });
 
 type SubscriptionFormValues = z.infer<typeof SubscriptionSchema>;
@@ -39,10 +41,16 @@ const defaultValues: Partial<SubscriptionFormValues> = {
   billing_cycle: 'monthly',
   reminder_offset: '1d',
   notification_mode: 'telegram',
+  category: null,
+  logo_url: null,
+  service_url: null,
+  payment_method: null,
+  notes: null,
 };
 
 const SubscriptionForm: React.FC = () => {
   const { user } = useSession();
+  const { data: categories, isLoading: isLoadingCategories } = useCategories();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [logoSearchQuery, setLogoSearchQuery] = useState('');
   const [logoSearchResults, setLogoSearchResults] = useState<{ name: string, logo_url: string }[]>([]);
@@ -92,6 +100,12 @@ const SubscriptionForm: React.FC = () => {
       next_payment_date: format(values.next_payment_date, 'yyyy-MM-dd'),
       renewal_price: values.renewal_price.toFixed(2),
       created_by: user.id, // Pass user ID for RLS and audit logging
+      // Ensure null values are passed correctly for optional fields
+      category: values.category || null,
+      logo_url: values.logo_url || null,
+      service_url: values.service_url || null,
+      payment_method: values.payment_method || null,
+      notes: values.notes || null,
     };
 
     try {
@@ -170,7 +184,7 @@ const SubscriptionForm: React.FC = () => {
           </div>
         )}
 
-        {/* Logo URL (Hidden if search results are shown, but kept for manual input) */}
+        {/* Logo URL */}
         <FormField
           control={form.control}
           name="logo_url"
@@ -178,7 +192,11 @@ const SubscriptionForm: React.FC = () => {
             <FormItem>
               <FormLabel>Logo URL (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="https://example.com/logo.png" {...field} />
+                <Input 
+                  placeholder="https://example.com/logo.png" 
+                  {...field} 
+                  value={field.value ?? ''}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -193,8 +211,43 @@ const SubscriptionForm: React.FC = () => {
             <FormItem>
               <FormLabel>Service URL (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="https://netflix.com" {...field} />
+                <Input 
+                  placeholder="https://netflix.com" 
+                  {...field} 
+                  value={field.value ?? ''}
+                />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Category Select */}
+        <FormField
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Category (Optional)</FormLabel>
+              {isLoadingCategories ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select onValueChange={field.onChange} defaultValue={field.value || ''}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {categories?.map(cat => (
+                      <SelectItem key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -356,7 +409,11 @@ const SubscriptionForm: React.FC = () => {
             <FormItem>
               <FormLabel>Notes (Optional)</FormLabel>
               <FormControl>
-                <Textarea placeholder="Any specific details about this subscription..." {...field} />
+                <Textarea 
+                  placeholder="Any specific details about this subscription..." 
+                  {...field} 
+                  value={field.value ?? ''}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -18,7 +18,7 @@ const ContactSchema = z.object({
 
 type ContactFormValues = z.infer<typeof ContactSchema>;
 
-const ContactForm: React.FC = () => {
+const TelegramContactForm: React.FC = () => {
   const { user } = useSession();
   const [isLoading, setIsLoading] = useState(true);
   const [existingContactId, setExistingContactId] = useState<string | null>(null);
@@ -145,4 +145,4 @@ const ContactForm: React.FC = () => {
   );
 };
 
-export default ContactForm;
+export default TelegramContactForm;
