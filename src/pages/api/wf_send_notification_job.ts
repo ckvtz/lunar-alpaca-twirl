@@ -4,18 +4,20 @@ import { DateTime } from 'luxon';
 
 // NOTE: We assume EMAIL_API_ENDPOINT is set for production email delivery.
 const EMAIL_API_ENDPOINT = process.env.EMAIL_API_ENDPOINT;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 /**
  * send message via Telegram Bot API
  */
 async function sendViaTelegram(chatId: string | number, text: string) {
-  if (!process.env.TELEGRAM_BOT_TOKEN) {
-    throw new Error('TELEGRAM_BOT_TOKEN not set');
+  if (!TELEGRAM_BOT_TOKEN) {
+    throw new Error('TELEGRAM_BOT_TOKEN not set in environment.');
   }
-  const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   const body = {
     chat_id: String(chatId),
     text: String(text || ''),
+    parse_mode: 'MarkdownV2', // Use MarkdownV2 for better formatting control
     disable_web_page_preview: true
   };
   const resp = await fetch(url, {
@@ -32,7 +34,7 @@ async function sendViaTelegram(chatId: string | number, text: string) {
  */
 async function sendViaEmail(toEmail: string, subject: string, body: string) {
   if (!EMAIL_API_ENDPOINT) {
-    throw new Error('EMAIL_API_ENDPOINT not set');
+    throw new Error('EMAIL_API_ENDPOINT not set in environment.');
   }
   
   // This is a placeholder for calling an external email service API
@@ -40,7 +42,6 @@ async function sendViaEmail(toEmail: string, subject: string, body: string) {
     to: toEmail,
     subject: subject,
     body: body,
-    // Add any necessary API keys/secrets here if not handled by the environment
   };
 
   const resp = await fetch(EMAIL_API_ENDPOINT, {
@@ -62,7 +63,7 @@ async function sendViaEmail(toEmail: string, subject: string, body: string) {
 async function resolveTelegramChatId(payload_json: any) {
   if (!payload_json) return null;
   if (payload_json.chat_id) return payload_json.chat_id;
-  if (payload_json.to && typeof payload_json.to === 'string' && payload_json.to.startsWith('tg_')) return payload_json.to.substring(3); // Simple prefix check if 'to' is used for Telegram
+  if (payload_json.to && typeof payload_json.to === 'string' && payload_json.to.startsWith('tg_')) return payload_json.to.substring(3);
   
   if (payload_json.user_id) {
     const lookupUserId = payload_json.user_id;
@@ -83,14 +84,7 @@ async function resolveTelegramChatId(payload_json: any) {
  * Resolve the user's email address.
  */
 async function resolveUserEmail(userId: string) {
-    // We need to fetch the user's email from the auth.users table.
-    // Since we cannot directly query auth.users from the public schema, 
-    // we rely on the fact that the user's email is often available in the JWT claims 
-    // or we can use a custom RPC/function if needed. 
-    // For simplicity and security, we will assume the user's email is stored in the 'profiles' table 
-    // or we fetch it via a privileged query if necessary.
-    
-    // NOTE: The 'users' table in the public schema seems to mirror auth.users data. Let's use that.
+    // Use the 'users' table in the public schema which mirrors auth.users data.
     const { data: user, error } = await supabaseServerClient
         .from('users')
         .select('email')
@@ -103,6 +97,14 @@ async function resolveUserEmail(userId: string) {
         return null;
     }
     return user?.email || null;
+}
+
+/**
+ * Helper to escape MarkdownV2 special characters for Telegram.
+ */
+function escapeMarkdownV2(text: string): string {
+    // List of characters to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
+    return text.replace(/([_*[\]()~`>#+\-=|{}.!])/g, '\\$1');
 }
 
 
@@ -124,7 +126,7 @@ export default async function handler(req: any, res: any) {
     // fetch the notification row and associated subscription data
     const { data: notif, error: fetchErr } = await supabaseServerClient
       .from('notifications')
-      .select('id, payload_json, status, attempts_count, max_attempts, next_attempt_at, subscriptions(notification_mode)')
+      .select('id, payload_json, status, attempts_count, max_attempts, next_attempt_at, subscriptions(notification_mode, name)')
       .eq('id', notification_id)
       .single();
 
@@ -139,6 +141,10 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true, message: 'Notification already sent', notification_id });
     }
     
+    const payload = notif.payload_json || {};
+    const currentAttempts = notif.attempts_count || 0;
+    const maxAttempts = notif.max_attempts || 5;
+    
     // Check if it's time to attempt delivery based on next_attempt_at
     const now = DateTime.now().toUTC();
     const nextAttemptDt = notif.next_attempt_at ? DateTime.fromISO(notif.next_attempt_at, { zone: 'utc' }) : now;
@@ -148,19 +154,29 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({ ok: true, message: 'Notification scheduled for future attempt', notification_id });
     }
 
-    const payload = notif.payload_json || {};
-    const currentAttempts = notif.attempts_count || 0;
-    const maxAttempts = notif.max_attempts || 5;
-    // FIX: Access the first element of the subscriptions array
-    const notificationMode = (notif.subscriptions as any)?.[0]?.notification_mode || 'telegram'; // Default to telegram
+    // FIX: Access the first element of the subscriptions array and default to 'telegram'
+    const subscriptionDetails = (notif.subscriptions as any)?.[0];
+    const notificationMode = subscriptionDetails?.notification_mode || 'telegram'; 
+    const subscriptionName = subscriptionDetails?.name || 'Subscription';
 
     // construct message text
-    const title = payload.title || payload.subject || 'Subscription Reminder';
-    const body = payload.body || payload.text || 'Your subscription is due soon.';
+    const title = payload.title || `Renewal Reminder: ${subscriptionName}`;
+    const body = payload.body || 'Your subscription is due soon.';
+    
+    // Prepare Telegram message using MarkdownV2 escaping
+    const escapedTitle = escapeMarkdownV2(title);
+    const escapedBody = escapeMarkdownV2(body);
+    
     const lines: string[] = [];
-    if (title) lines.push(title);
-    if (body) lines.push(body);
-    if (payload.meta?.url) lines.push(`Link: ${payload.meta.url}`);
+    lines.push(`*${escapedTitle}*`);
+    lines.push(escapedBody);
+    
+    if (payload.meta?.url) {
+        // Telegram requires links to be formatted as [Text](URL)
+        const urlText = escapeMarkdownV2(payload.meta.url);
+        lines.push(`[View Service](${urlText})`);
+    }
+    
     const messageText = lines.join('\n\n').trim();
     
     let deliveryResult: { ok: boolean, method: string, error?: string, status?: number, body?: string } = { ok: false, method: 'none' };
@@ -185,7 +201,7 @@ export default async function handler(req: any, res: any) {
 
         if (userEmail) {
             try {
-                const email = await sendViaEmail(userEmail, title, messageText);
+                const email = await sendViaEmail(userEmail, title, body); // Email body doesn't need MarkdownV2 escaping
                 deliveryResult = { ok: email.ok, method: 'email', status: email.status, body: email.body };
             } catch (e: any) {
                 deliveryResult = { ok: false, method: 'email', error: `send_exception: ${e.message || String(e)}` };
