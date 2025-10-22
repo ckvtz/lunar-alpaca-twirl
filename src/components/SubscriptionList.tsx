@@ -3,12 +3,13 @@ import { useSubscriptions } from '@/hooks/use-subscriptions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DollarSign, Calendar, Repeat, Bell, Link as LinkIcon, Edit } from 'lucide-react';
-import { format } from 'date-fns';
 import { Subscription } from '@/types/subscription';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useProfile } from '@/hooks/use-profile';
+import { DateTime } from 'luxon';
 
 interface SubscriptionListProps {
   queryOptions: {
@@ -19,8 +20,9 @@ interface SubscriptionListProps {
   };
 }
 
-const SubscriptionCard: React.FC<{ subscription: Subscription }> = ({ subscription }) => {
-  const nextPaymentDate = format(new Date(subscription.next_payment_date), 'MMM dd, yyyy');
+const SubscriptionCard: React.FC<{ subscription: Subscription, userTimezone: string }> = ({ subscription, userTimezone }) => {
+  const nextPaymentDate = DateTime.fromISO(subscription.next_payment_date, { zone: 'utc' }).setZone(userTimezone);
+  const formattedDate = nextPaymentDate.toFormat('MMM dd, yyyy');
   const serviceUrl = subscription.service_url;
   
   return (
@@ -62,7 +64,7 @@ const SubscriptionCard: React.FC<{ subscription: Subscription }> = ({ subscripti
               <Calendar className="h-4 w-4 mr-2" />
               <span>Next Payment:</span>
             </div>
-            <span className="font-medium">{nextPaymentDate}</span>
+            <span className="font-medium">{formattedDate}</span>
           </div>
 
           <div className="flex items-center justify-between text-sm">
@@ -106,8 +108,9 @@ const SubscriptionCard: React.FC<{ subscription: Subscription }> = ({ subscripti
 
 const SubscriptionList: React.FC<SubscriptionListProps> = ({ queryOptions }) => {
   const { data: subscriptions, isLoading, isError } = useSubscriptions(queryOptions);
+  const { data: profile, isLoading: isLoadingProfile } = useProfile();
 
-  if (isLoading) {
+  if (isLoading || isLoadingProfile) {
     return (
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {[...Array(3)].map((_, i) => (
@@ -127,6 +130,8 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({ queryOptions }) => 
   if (isError) {
     return <p className="text-destructive">Error loading subscriptions. Please try again.</p>;
   }
+  
+  const userTimezone = profile?.timezone || 'UTC';
 
   if (!subscriptions || subscriptions.length === 0) {
     return (
@@ -145,7 +150,7 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({ queryOptions }) => 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {subscriptions.map((sub) => (
-        <SubscriptionCard key={sub.id} subscription={sub} />
+        <SubscriptionCard key={sub.id} subscription={sub} userTimezone={userTimezone} />
       ))}
     </div>
   );

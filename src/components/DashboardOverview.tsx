@@ -4,9 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, Calendar, Repeat, TrendingUp } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Subscription } from '@/types/subscription';
-import { format, formatDistanceToNow, parseISO } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns'; // Keeping date-fns for distance calculation
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { useProfile } from '@/hooks/use-profile';
+import { DateTime } from 'luxon';
 
 const MetricCard: React.FC<{ title: string, value: string | number, icon: React.ReactNode }> = ({ title, value, icon }) => (
   <Card>
@@ -20,9 +22,13 @@ const MetricCard: React.FC<{ title: string, value: string | number, icon: React.
   </Card>
 );
 
-const UpcomingSubscriptionItem: React.FC<{ sub: Subscription }> = ({ sub }) => {
-  const nextPaymentDate = parseISO(sub.next_payment_date);
-  const daysUntil = formatDistanceToNow(nextPaymentDate, { addSuffix: true });
+const UpcomingSubscriptionItem: React.FC<{ sub: Subscription, userTimezone: string }> = ({ sub, userTimezone }) => {
+  // Parse the date (stored as YYYY-MM-DD, treated as UTC midnight by server) and convert to user's timezone
+  const nextPaymentDate = DateTime.fromISO(sub.next_payment_date, { zone: 'utc' }).setZone(userTimezone);
+  
+  // Use standard Date object for formatDistanceToNow (which uses local time internally, but we pass the date object)
+  // Note: formatDistanceToNow is less precise with timezones, but acceptable for "X days away"
+  const daysUntil = formatDistanceToNow(nextPaymentDate.toJSDate(), { addSuffix: true });
 
   return (
     <Link to={`/subscriptions/${sub.id}/edit`} className="flex items-center justify-between p-3 hover:bg-accent rounded-md transition-colors">
@@ -43,7 +49,7 @@ const UpcomingSubscriptionItem: React.FC<{ sub: Subscription }> = ({ sub }) => {
       </div>
       <div className="text-right">
         <Badge variant="secondary" className="mb-1">
-          {format(nextPaymentDate, 'MMM dd')}
+          {nextPaymentDate.toFormat('MMM dd')}
         </Badge>
         <p className="text-xs text-muted-foreground">{daysUntil}</p>
       </div>
@@ -53,8 +59,9 @@ const UpcomingSubscriptionItem: React.FC<{ sub: Subscription }> = ({ sub }) => {
 
 const DashboardOverview: React.FC = () => {
   const { data, isLoading, isError } = useDashboardData();
+  const { data: profile, isLoading: isLoadingProfile } = useProfile();
 
-  if (isLoading) {
+  if (isLoading || isLoadingProfile) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Skeleton className="h-[120px]" />
@@ -73,6 +80,12 @@ const DashboardOverview: React.FC = () => {
   }
 
   const { totalMonthlySpend, upcomingSubscriptions } = data;
+  const userTimezone = profile?.timezone || 'UTC';
+  
+  // Calculate next payment date in user's timezone for the metric card
+  const nextPaymentDate = upcomingSubscriptions.length > 0 
+    ? DateTime.fromISO(upcomingSubscriptions[0].next_payment_date, { zone: 'utc' }).setZone(userTimezone)
+    : null;
 
   return (
     <div className="space-y-8">
@@ -89,7 +102,7 @@ const DashboardOverview: React.FC = () => {
         />
         <MetricCard 
           title="Next Payment Due" 
-          value={upcomingSubscriptions.length > 0 ? format(parseISO(upcomingSubscriptions[0].next_payment_date), 'MMM dd') : 'N/A'} 
+          value={nextPaymentDate ? nextPaymentDate.toFormat('MMM dd') : 'N/A'} 
           icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
         />
       </div>
@@ -102,7 +115,7 @@ const DashboardOverview: React.FC = () => {
           {upcomingSubscriptions.length > 0 ? (
             <div className="divide-y">
               {upcomingSubscriptions.map(sub => (
-                <UpcomingSubscriptionItem key={sub.id} sub={sub} />
+                <UpcomingSubscriptionItem key={sub.id} sub={sub} userTimezone={userTimezone} />
               ))}
             </div>
           ) : (
