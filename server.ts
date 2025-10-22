@@ -5,9 +5,7 @@ import updateSub from './src/pages/api/action_update_subscription.ts';
 import deleteSub from './src/pages/api/action_delete_subscription.ts';
 import wfSend from './src/pages/api/wf_send_notification_job.ts';
 import wfDispatch from './src/pages/api/wf_notification_dispatcher.ts';
-import monitorStatus from './src/pages/api/monitor_status.ts';
-import generateToken from './src/pages/api/action_generate_telegram_link_token.ts'; // Import new token generator
-import linkContact from './src/pages/api/wf_link_telegram_contact.ts'; // Import new contact linker
+import monitorStatus from './src/pages/api/monitor_status.ts'; // Import new monitor action
 
 // simple ping
 const ping = (_req: Request, res: Response) => res.json({ ok: true, now: new Date().toISOString() });
@@ -18,7 +16,7 @@ app.use(express.json());
 // mount handlers
 app.get('/api/ping', ping);
 
-// Subscription Actions
+// If the imported handlers are default functions (req,res), call them directly.
 app.post('/api/action_logo_search', (req: Request, res: Response) => {
   return (logoSearch as any)(req, res);
 });
@@ -31,28 +29,19 @@ app.post('/api/action_update_subscription', (req: Request, res: Response) => {
 app.post('/api/action_delete_subscription', (req: Request, res: Response) => {
   return (deleteSub as any)(req, res);
 });
-
-// Notification Workflow Endpoints
 app.post('/api/wf_send_notification_job', (req: Request, res: Response) => {
   return (wfSend as any)(req, res);
 });
+
+// New dispatcher endpoint (GET request, suitable for scheduling)
 app.get('/api/wf_notification_dispatcher', (req: Request, res: Response) => {
   return (wfDispatch as any)(req, res);
 });
 
-// Monitoring Endpoint
+// New monitoring endpoint
 app.get('/api/monitor_status', (req: Request, res: Response) => {
   return (monitorStatus as any)(req, res);
 });
-
-// Telegram Linking Endpoints
-app.post('/api/action_generate_telegram_link_token', (req: Request, res: Response) => {
-  return (generateToken as any)(req, res);
-});
-app.post('/api/wf_link_telegram_contact', (req: Request, res: Response) => {
-  return (linkContact as any)(req, res);
-});
-
 
 const port = process.env.PORT ? Number(process.env.PORT) : 32100;
 app.listen(port, () => {

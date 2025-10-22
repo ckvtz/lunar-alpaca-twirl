@@ -5,17 +5,23 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Save, User, Mail, Bot, ArrowRight } from 'lucide-react';
+import { Loader2, Save, User } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
 import { showSuccess, showError } from '@/utils/toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
-import { Link } from 'react-router-dom';
-import { useTelegramContactStatus } from '@/hooks/use-telegram-contact-status';
-import { TIMEZONES } from '@/lib/timezones';
+
+// Simplified list of common timezones
+const TIMEZONES = [
+  'UTC',
+  'America/New_York',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Europe/Paris',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+];
 
 // --- Schema Definition ---
 const ProfileSchema = z.object({
@@ -29,8 +35,7 @@ type ProfileFormValues = z.infer<typeof ProfileSchema>;
 
 const ProfileForm: React.FC = () => {
   const { user } = useSession();
-  const { data: telegramContact, isLoading: isLoadingTelegram } = useTelegramContactStatus();
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(ProfileSchema),
@@ -44,7 +49,7 @@ const ProfileForm: React.FC = () => {
 
   const fetchProfile = async () => {
     if (!user) return;
-    setIsLoadingProfile(true);
+    setIsLoading(true);
     
     // RLS ensures only the user's profile is returned
     const { data, error } = await supabase
@@ -64,7 +69,7 @@ const ProfileForm: React.FC = () => {
     } else if (error && error.code !== 'PGRST116') { // PGRST116: No rows found (profile might not exist yet)
       showError('Failed to load profile: ' + error.message);
     }
-    setIsLoadingProfile(false);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -98,7 +103,7 @@ const ProfileForm: React.FC = () => {
     }
   };
 
-  if (isLoadingProfile || isLoadingTelegram) {
+  if (isLoading) {
     return <Loader2 className="h-6 w-6 animate-spin mx-auto" />;
   }
 
@@ -115,7 +120,7 @@ const ProfileForm: React.FC = () => {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -191,41 +196,6 @@ const ProfileForm: React.FC = () => {
             </Button>
           </form>
         </Form>
-        
-        <Separator className="my-6" />
-
-        {/* Notification Status Summary */}
-        <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Notification Status</h3>
-            
-            {/* Email Status */}
-            <div className="flex items-center justify-between p-3 border rounded-md">
-                <div className="flex items-center space-x-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">Email:</span>
-                </div>
-                <span className="text-sm truncate max-w-[60%]">{user?.email}</span>
-            </div>
-
-            {/* Telegram Status */}
-            <div className="flex items-center justify-between p-3 border rounded-md">
-                <div className="flex items-center space-x-2">
-                    <Bot className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">Telegram:</span>
-                </div>
-                {telegramContact ? (
-                    <Badge className="bg-green-500 hover:bg-green-500/80">Linked</Badge>
-                ) : (
-                    <Badge variant="destructive">Not Linked</Badge>
-                )}
-            </div>
-
-            <Link to="/settings/contacts" className="block">
-                <Button variant="outline" className="w-full">
-                    Manage Notification Contacts <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-            </Link>
-        </div>
       </CardContent>
     </Card>
   );

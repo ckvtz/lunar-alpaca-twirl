@@ -87,7 +87,7 @@ async function resolveTelegramChatId(payload_json: any) {
 }
 
 /**
- * Resolve the user's email address using the public.users table.
+ * Resolve the user's email address.
  */
 async function resolveUserEmail(userId: string) {
     // Use the 'users' table in the public schema which mirrors auth.users data.

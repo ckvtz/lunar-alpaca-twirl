@@ -1,74 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Loader2, Bot, Link, RefreshCw, Trash2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Loader2, Save, Bot } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
 import { showSuccess, showError } from '@/utils/toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
-import { useTelegramContactStatus } from '@/hooks/use-telegram-contact-status';
 
-// NOTE: This should be configured by the user based on their deployed bot.
-const TELEGRAM_BOT_USERNAME = '@YOUR_BOT_USERNAME'; 
+// --- Schema Definition ---
+const ContactSchema = z.object({
+  telegram_chat_id: z.string().min(5, { message: "Chat ID must be at least 5 characters." }),
+});
+
+type ContactFormValues = z.infer<typeof ContactSchema>;
 
 const TelegramContactForm: React.FC = () => {
   const { user } = useSession();
-  const { data: contact, isLoading, refetch } = useTelegramContactStatus();
-  const existingContactId = contact?.contact_id || null;
+  const [isLoading, setIsLoading] = useState(true);
+  const [existingContactId, setExistingContactId] = useState<string | null>(null);
 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isUnlinking, setIsUnlinking] = useState(false);
-  const [linkToken, setLinkToken] = useState<string | null>(null);
+  const form = useForm<ContactFormValues>({
+    resolver: zodResolver(ContactSchema),
+    defaultValues: {
+      telegram_chat_id: '',
+    },
+  });
 
-  const handleGenerateToken = async () => {
-    if (!user) {
-      showError("You must be logged in to generate a token.");
-      return;
+  const fetchExistingContact = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('user_contacts')
+      .select('contact_id')
+      .eq('user_id', user.id)
+      .eq('provider', 'telegram')
+      .limit(1)
+      .single();
+
+    if (data) {
+      setExistingContactId(data.contact_id);
+      form.reset({ telegram_chat_id: data.contact_id });
+    } else if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
+      showError('Failed to load existing contact: ' + error.message);
     }
-    setIsGenerating(true);
-    setLinkToken(null);
-
-    try {
-      const response = await fetch('/api/action_generate_telegram_link_token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.ok) {
-        setLinkToken(data.token);
-        showSuccess('Link token generated successfully!');
-      } else {
-        showError(data.error || 'Failed to generate link token.');
-      }
-    } catch (error) {
-      showError('Network error: Could not connect to server.');
-    } finally {
-      setIsGenerating(false);
-    }
+    setIsLoading(false);
   };
 
-  const handleUnlink = async () => {
-    if (!user || !existingContactId) return;
-    setIsUnlinking(true);
+  useEffect(() => {
+    fetchExistingContact();
+  }, [user]);
 
-    const { error } = await supabase
-      .from('user_contacts')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('provider', 'telegram');
-
-    if (error) {
-      showError('Failed to unlink contact: ' + error.message);
-    } else {
-      showSuccess('Telegram contact unlinked successfully.');
-      setLinkToken(null);
-      refetch(); // Refetch status via hook
+  const onSubmit = async (values: ContactFormValues) => {
+    if (!user) {
+      showError("You must be logged in to update contacts.");
+      return;
     }
-    setIsUnlinking(false);
+    
+    const contactData = {
+      user_id: user.id,
+      provider: 'telegram',
+      contact_type: 'chat_id',
+      contact_id: values.telegram_chat_id,
+    };
+
+    let response;
+    if (existingContactId) {
+      // Update existing contact
+      response = await supabase
+        .from('user_contacts')
+        .update(contactData)
+        .eq('user_id', user.id)
+        .eq('provider', 'telegram');
+    } else {
+      // Insert new contact
+      response = await supabase
+        .from('user_contacts')
+        .insert([contactData]);
+    }
+
+    if (response.error) {
+      showError('Failed to save contact: ' + response.error.message);
+    } else {
+      setExistingContactId(values.telegram_chat_id); // Update state to reflect insertion/update
+      showSuccess('Telegram Chat ID saved successfully!');
+    }
   };
 
   if (isLoading) {
@@ -83,86 +102,44 @@ const TelegramContactForm: React.FC = () => {
           Telegram Notification Setup
         </CardTitle>
         <CardDescription>
-          Link your Telegram account to receive subscription reminders.
+          Link your Telegram Chat ID to receive subscription reminders.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {TELEGRAM_BOT_USERNAME === '@YOUR_BOT_USERNAME' && (
-            <Alert variant="destructive" className="mb-4">
-                <AlertTitle>Configuration Required</AlertTitle>
-                <AlertDescription>
-                    Please update the <code>TELEGRAM_BOT_USERNAME</code> constant in <code>src/components/TelegramContactForm.tsx</code> with your actual Telegram bot's username.
-                </AlertDescription>
-            </Alert>
-        )}
+        <p className="text-sm mb-4">
+          1. Find our bot on Telegram: **@SubscriptionGuardBot** (Placeholder name).
+        </p>
+        <p className="text-sm mb-4">
+          2. Send the bot any message (e.g., "Hi"). The bot will reply with your unique Chat ID.
+        </p>
+        <p className="text-sm mb-6">
+          3. Paste the Chat ID below and click Save.
+        </p>
 
-        {existingContactId ? (
-          <Alert className="bg-green-50 dark:bg-green-900/20 border-green-500 text-green-700 dark:text-green-300">
-            <Link className="h-4 w-4" />
-            <AlertTitle>Linked Successfully!</AlertTitle>
-            <AlertDescription>
-              Your Telegram account is linked (Chat ID: {existingContactId}). You can now select Telegram as a notification mode for your subscriptions.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <Alert variant="default">
-            <AlertTitle>Not Linked</AlertTitle>
-            <AlertDescription>
-              Your Telegram account is not currently linked. Generate a token below to start the process.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <Separator className="my-6" />
-
-        {linkToken ? (
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Linking Instructions:</h3>
-            <p className="text-sm">
-              1. Open Telegram and find our bot: <a href={`https://t.me/${TELEGRAM_BOT_USERNAME.substring(1)}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-mono">{TELEGRAM_BOT_USERNAME}</a>
-            </p>
-            <p className="text-sm">
-              2. Send the bot the following command:
-            </p>
-            <div className="p-3 bg-muted rounded-md font-mono text-sm break-all">
-              /link {linkToken}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              This token is valid for 1 hour. Once the bot confirms the link, refresh this page.
-            </p>
-            <Button variant="secondary" onClick={() => refetch()} className="w-full">
-              <RefreshCw className="mr-2 h-4 w-4" /> Check Status / Refresh
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <Button 
-              onClick={handleGenerateToken} 
-              className="w-full" 
-              disabled={isGenerating || isUnlinking}
-            >
-              {isGenerating ? (
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="telegram_chat_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Your Telegram Chat ID</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., 123456789" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <><Link className="mr-2 h-4 w-4" /> Generate Link Token</>
+                <><Save className="mr-2 h-4 w-4" /> Save Chat ID</>
               )}
             </Button>
-            {existingContactId && (
-              <Button 
-                onClick={handleUnlink} 
-                variant="outline" 
-                className="w-full text-destructive hover:bg-destructive/10"
-                disabled={isUnlinking || isGenerating}
-              >
-                {isUnlinking ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <><Trash2 className="mr-2 h-4 w-4" /> Unlink Telegram</>
-                )}
-              </Button>
-            )}
-          </div>
-        )}
+          </form>
+        </Form>
       </CardContent>
     </Card>
   );
