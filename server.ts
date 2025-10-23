@@ -1,4 +1,5 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
+import type { Request, Response } from 'express';
 import logoSearch from './src/pages/api/action_logo_search.ts';
 import createSub from './src/pages/api/action_create_subscription.ts';
 import updateSub from './src/pages/api/action_update_subscription.ts';
@@ -12,6 +13,18 @@ const ping = (_req: Request, res: Response) => res.json({ ok: true, now: new Dat
 
 const app = express();
 app.use(express.json());
+
+// API: monitor_status (register before any static/catch-all routes)
+app.get("/api/monitor_status", async (req, res) => {
+  try {
+    const mod = await import("./src/pages/api/monitor_status.ts");
+    return (mod.default as any)(req, res);
+  } catch (e) {
+    console.error("dynamic import monitor_status failed", e);
+    return res.status(500).json({ error: "handler import failed" });
+  }
+});
+
 
 // mount handlers
 app.get('/api/ping', ping);
